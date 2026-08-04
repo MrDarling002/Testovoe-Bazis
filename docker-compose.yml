@@ -54,7 +54,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./configs/config.yaml:/etc/app/config.yaml:ro
+      - ./config/config.yaml:/etc/app/config.yaml:ro
 
 volumes:
   mysql_data:
