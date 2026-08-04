@@ -1,0 +1,27 @@
+server:
+  addr: ":8080"
+
+db:
+  dsn: "app:app@tcp(mysql:3306)/task_service?parseTime=true&loc=UTC"
+  max_open_conns: 25
+  max_idle_conns: 10
+  conn_max_lifetime: 5m
+
+redis:
+  addr: "redis:6379"
+  password: ""
+  db: 0
+
+jwt:
+  secret: "change-me"
+  ttl: 24h
+
+rate_limit:
+  requests_per_minute: 100
+
+cache:
+  tasks_ttl: 5m
+
+email:
+  base_url: "http://email-mock:9000"
+  timeout: 3s
