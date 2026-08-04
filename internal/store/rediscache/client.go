@@ -16,9 +16,9 @@ type Config struct {
 
 func NewClient(ctx context.Context, cfg Config) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
-		Addr: cfg.Addr,
+		Addr:     cfg.Addr,
 		Password: cfg.Password,
-		DB: cfg.DB,
+		DB:       cfg.DB,
 	})
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)

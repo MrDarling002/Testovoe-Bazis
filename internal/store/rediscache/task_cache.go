@@ -15,8 +15,8 @@ import (
 )
 
 type TaskCache struct {
-	rdb *redis.Client
-	ttl time.Duration
+	rdb     *redis.Client
+	ttl     time.Duration
 	metrics *metrics.Metrics
 	logger  *slog.Logger
 }

@@ -19,7 +19,7 @@ type Config struct {
 }
 
 type HTTPSender struct {
-	client *http.Client
+	client  *http.Client
 	baseURL string
 	breaker *gobreaker.CircuitBreaker
 	metrics *metrics.Metrics
