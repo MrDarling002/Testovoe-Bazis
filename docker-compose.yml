@@ -12,8 +12,6 @@ services:
       MYSQL_USER: app
       MYSQL_PASSWORD: app
     ports:
-      # Bound to localhost only: the database must not be reachable from
-      # outside the host in any environment.
       - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
@@ -55,8 +53,6 @@ services:
       CONFIG_PATH: /etc/app/config.yaml
       DB_DSN: "app:app@tcp(mysql:3306)/task_service?parseTime=true&loc=UTC"
       REDIS_ADDR: "redis:6379"
-      # Development-only secret. In production inject a random value from a
-      # secret manager; the service refuses to start with a short secret.
       JWT_SECRET: "local-dev-only-secret-0123456789abcdef"
       EMAIL_BASE_URL: "http://email-mock:9000"
     ports:

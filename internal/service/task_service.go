@@ -57,9 +57,6 @@ func NewTaskService(tasks TaskGateway, teams TeamGateway, cache TaskCacheGateway
 	}
 }
 
-// memberRole resolves the actor's role in the team, translating "not a
-// member" into ErrForbidden while passing infrastructure errors through
-// unchanged so they surface as 500s, not 403s.
 func (s *TaskService) memberRole(ctx context.Context, teamID, userID int64) (domain.Role, error) {
 	role, err := s.teams.GetMemberRole(ctx, teamID, userID)
 	if err != nil {

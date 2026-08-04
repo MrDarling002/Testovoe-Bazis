@@ -1,5 +1,3 @@
-// Package ratelimit implements a token-bucket rate limiter backed by an
-// atomic Redis Lua script.
 package ratelimit
 
 import (
@@ -10,9 +8,6 @@ import (
 )
 
 type Limiter interface {
-	// Allow reports whether the request identified by key is within the
-	// limit. On infrastructure errors it returns (false, err); the caller
-	// decides whether to fail open or closed.
 	Allow(ctx context.Context, key string) (bool, error)
 }
 

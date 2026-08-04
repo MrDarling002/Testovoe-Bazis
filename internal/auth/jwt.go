@@ -1,5 +1,3 @@
-// Package auth provides JWT issuing/parsing and the HTTP authentication
-// middleware that stores the user identity in the request context.
 package auth
 
 import (
@@ -112,5 +110,5 @@ func AuthMiddleware(manager *JWTManager) func(http.Handler) http.Handler {
 func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(`{"error":"unauthorized"}`)) //nolint:errcheck // best effort
+	w.Write([]byte(`{"error":"unauthorized"}`))
 }

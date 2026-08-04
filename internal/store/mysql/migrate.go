@@ -13,9 +13,6 @@ import (
 	"github.com/example/Testovoe-Bazis/migrations"
 )
 
-// Migrate applies all pending embedded schema migrations. It opens a dedicated
-// connection because golang-migrate requires multiStatements=true, which the
-// application pool does not need.
 func Migrate(dsn string) error {
 	db, err := sql.Open("mysql", withMultiStatements(dsn))
 	if err != nil {

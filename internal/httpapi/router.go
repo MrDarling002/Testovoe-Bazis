@@ -62,8 +62,6 @@ func (h *Handler) Router() http.Handler {
 	r.Handle("/metrics", promhttp.Handler())
 
 	r.Route("/api/v1", func(r chi.Router) {
-		// Public endpoints are rate limited by client IP: login and
-		// register are the primary brute-force targets.
 		r.Group(func(r chi.Router) {
 			r.Use(h.RateLimit)
 

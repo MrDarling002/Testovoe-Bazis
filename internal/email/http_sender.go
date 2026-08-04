@@ -18,11 +18,8 @@ type Config struct {
 	Timeout time.Duration
 }
 
-// HTTPSender delivers invitation emails through an external HTTP service,
-// guarded by a circuit breaker so a slow or dead email service cannot take
-// the API down with it.
 type HTTPSender struct {
-	client  *http.Client
+	client *http.Client
 	baseURL string
 	breaker *gobreaker.CircuitBreaker
 	metrics *metrics.Metrics

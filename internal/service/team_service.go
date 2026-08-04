@@ -30,8 +30,6 @@ type TeamStore interface {
 	AddMember(ctx context.Context, teamID int64, userID int64, invitedBy int64, role domain.Role) error
 }
 
-// InviteInput identifies the invitee either by user ID or by email
-// (exactly one must be set) and carries the target role.
 type InviteInput struct {
 	UserID int64
 	Email  string
@@ -147,9 +145,6 @@ func (s *TeamService) Invite(ctx context.Context, actorID int64, teamID int64, r
 		return InviteResult{}, err
 	}
 
-	// AddMember relies on the composite primary key to resolve the race
-	// between the IsMember check above and this insert: a concurrent invite
-	// surfaces as domain.ErrConflict.
 	if err := s.teams.AddMember(ctx, teamID, invitee.ID, actorID, req.Role); err != nil {
 		return InviteResult{}, err
 	}

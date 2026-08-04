@@ -68,8 +68,6 @@ func New() *Metrics {
 	return m
 }
 
-// RegisterDBStats exposes database/sql connection pool statistics
-// (open connections, wait count, etc.) as Prometheus metrics.
 func RegisterDBStats(db *sql.DB, dbName string) {
 	prometheus.MustRegister(collectors.NewDBStatsCollector(db, dbName))
 }

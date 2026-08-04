@@ -106,7 +106,7 @@ func (r *TaskRepository) Create(ctx context.Context, task domain.Task) (domain.T
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+	defer tx.Rollback()
 
 	now := time.Now().UTC().Truncate(time.Second)
 
@@ -175,9 +175,6 @@ func (r *TaskRepository) Create(ctx context.Context, task domain.Task) (domain.T
 	return task, nil
 }
 
-// Update loads the task with a row lock, invokes the authorize callback so the
-// permission check and the write happen against the same row version, applies
-// the patch and records every field change in task_history atomically.
 func (r *TaskRepository) Update(
 	ctx context.Context,
 	id int64,
@@ -189,7 +186,7 @@ func (r *TaskRepository) Update(
 	if err != nil {
 		return domain.Task{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+	defer tx.Rollback()
 
 	var task domain.Task
 
@@ -276,8 +273,6 @@ func (r *TaskRepository) Update(
 	return task, nil
 }
 
-// buildHistory mutates task in place according to patch and returns the audit
-// records for every actual change.
 func buildHistory(task *domain.Task, patch domain.TaskPatch, actorID int64, now time.Time) []domain.TaskHistory {
 	var history []domain.TaskHistory
 

@@ -14,7 +14,7 @@ import (
 
 const (
 	minPasswordLength = 8
-	maxPasswordLength = 72 // bcrypt input limit
+	maxPasswordLength = 72
 	minUsernameLength = 3
 	maxUsernameLength = 100
 	maxEmailLength    = 255
@@ -60,8 +60,6 @@ func (s *AuthService) Register(ctx context.Context, email, username, password st
 	return s.users.Create(ctx, email, username, string(hash))
 }
 
-// dummyHash keeps Login runtime roughly constant whether or not the user
-// exists, mitigating account enumeration via response timing.
 var dummyHash = func() []byte {
 	h, err := bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), bcrypt.DefaultCost)
 	if err != nil {

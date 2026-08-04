@@ -24,7 +24,7 @@ func (r *TeamRepository) Create(ctx context.Context, name string, description st
 	if err != nil {
 		return domain.Team{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+	defer tx.Rollback()
 
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO teams (name, description, created_by)
@@ -96,8 +96,6 @@ func (r *TeamRepository) ListByUser(ctx context.Context, userID int64) ([]domain
 	return teams, nil
 }
 
-// GetMemberRole returns domain.ErrNotFound when the user is not a member of
-// the team; interpreting that as "forbidden" is a service-layer decision.
 func (r *TeamRepository) GetMemberRole(ctx context.Context, teamID int64, userID int64) (domain.Role, error) {
 	var role domain.Role
 

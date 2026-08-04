@@ -9,8 +9,6 @@ import (
 	"github.com/example/Testovoe-Bazis/internal/domain"
 )
 
-// currentUser extracts the authenticated user ID from the request context and
-// writes a 401 response when it is missing.
 func (h *Handler) currentUser(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -21,10 +19,6 @@ func (h *Handler) currentUser(w http.ResponseWriter, r *http.Request) (int64, bo
 	return userID, true
 }
 
-// RateLimit throttles requests per authenticated user, falling back to the
-// client IP for unauthenticated endpoints (register/login). On limiter
-// infrastructure errors it fails open so Redis downtime does not take the
-// API down.
 func (h *Handler) RateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var key string

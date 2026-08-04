@@ -41,8 +41,6 @@ type Task struct {
 	CompletedAt *time.Time `db:"completed_at" json:"completed_at"`
 }
 
-// TaskHistory mirrors the task_history table. Field, OldValue and NewValue are
-// pointers because the "created" audit row stores NULL in all three columns.
 type TaskHistory struct {
 	ID        int64     `db:"id" json:"id"`
 	TaskID    int64     `db:"task_id" json:"task_id"`
@@ -88,8 +86,6 @@ func (f TaskFilters) Validate() error {
 	return nil
 }
 
-// OptionalInt64 distinguishes "field absent" (Set == false) from an explicit
-// JSON null (Set == true, Value == nil) in partial updates.
 type OptionalInt64 struct {
 	Set   bool
 	Value *int64

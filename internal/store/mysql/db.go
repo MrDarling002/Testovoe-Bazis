@@ -21,8 +21,6 @@ const (
 	pingBackoff  = 2 * time.Second
 )
 
-// NewDB opens a MySQL connection pool and verifies connectivity with a
-// bounded retry loop, so the service tolerates the database still starting up.
 func NewDB(ctx context.Context, cfg DBConfig) (*sqlx.DB, error) {
 	db, err := sqlx.Open("mysql", cfg.DSN)
 	if err != nil {

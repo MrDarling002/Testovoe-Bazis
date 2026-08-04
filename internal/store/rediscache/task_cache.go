@@ -14,11 +14,9 @@ import (
 	"github.com/example/Testovoe-Bazis/internal/metrics"
 )
 
-// TaskCache caches serialized task list pages per team. Invalidation bumps a
-// per-team version counter, which changes every cache key for that team.
 type TaskCache struct {
-	rdb     *redis.Client
-	ttl     time.Duration
+	rdb *redis.Client
+	ttl time.Duration
 	metrics *metrics.Metrics
 	logger  *slog.Logger
 }
@@ -69,9 +67,6 @@ func (c *TaskCache) versionKey(teamID int64) string {
 	return fmt.Sprintf("teams:%d:tasks:version", teamID)
 }
 
-// version returns "0" when the version key does not exist yet: INCR of a
-// missing key produces 1, so the very first invalidation is guaranteed to
-// change the cache keys.
 func (c *TaskCache) version(ctx context.Context, teamID int64) string {
 	v, err := c.rdb.Get(ctx, c.versionKey(teamID)).Result()
 	if err != nil {

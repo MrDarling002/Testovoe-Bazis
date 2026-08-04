@@ -6,8 +6,6 @@ import (
 	"github.com/example/Testovoe-Bazis/internal/domain"
 )
 
-// AnalyticsGateway queries are scoped by user ID at the SQL level, so every
-// report only covers teams the requesting user belongs to.
 type AnalyticsGateway interface {
 	TeamSummary(ctx context.Context, userID int64) ([]domain.TeamSummary, error)
 	TopCreators(ctx context.Context, userID int64) ([]domain.TopCreator, error)

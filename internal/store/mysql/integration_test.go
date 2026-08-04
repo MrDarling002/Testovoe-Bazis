@@ -1,9 +1,5 @@
 //go:build integration
 
-// Integration tests spin up a real MySQL 8 instance via testcontainers,
-// apply the embedded migrations and exercise the repositories end to end.
-//
-// Run with: go test -tags integration ./internal/store/mysql/ -v
 package mysql_test
 
 import (
@@ -184,7 +180,6 @@ func TestRepositoriesIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		// created + title + status + assignee_id
 		if len(history) != 4 {
 			t.Fatalf("history rows = %d, want 4", len(history))
 		}
@@ -298,7 +293,7 @@ func TestRepositoriesIntegration(t *testing.T) {
 	})
 
 	t.Run("analytics is scoped to the caller's teams", func(t *testing.T) {
-		summary, err := analytics.TeamSummary(ctx, bob.ID) // bob was removed from the team
+		summary, err := analytics.TeamSummary(ctx, bob.ID)
 		if err != nil {
 			t.Fatal(err)
 		}

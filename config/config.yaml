@@ -1,6 +1,3 @@
-# Base configuration. Deployment-specific and secret values are supplied via
-# environment variables: DB_DSN, REDIS_ADDR, REDIS_PASSWORD, JWT_SECRET,
-# EMAIL_BASE_URL, SERVER_ADDR, CONFIG_PATH.
 server:
   addr: ":8080"
 
@@ -16,9 +13,6 @@ redis:
   db: 0
 
 jwt:
-  # The secret is intentionally NOT set here: provide it via JWT_SECRET.
-  # The service fails to start if the secret is missing or shorter than
-  # 32 characters.
   ttl: 24h
 
 rate_limit:

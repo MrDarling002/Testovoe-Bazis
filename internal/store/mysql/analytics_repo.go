@@ -9,8 +9,6 @@ import (
 	"github.com/example/Testovoe-Bazis/internal/domain"
 )
 
-// AnalyticsRepository runs the reporting queries. Every query is scoped to the
-// teams the requesting user belongs to, so no cross-team data leaks out.
 type AnalyticsRepository struct {
 	db *sqlx.DB
 }
@@ -19,9 +17,6 @@ func NewAnalyticsRepository(db *sqlx.DB) *AnalyticsRepository {
 	return &AnalyticsRepository{db: db}
 }
 
-// TeamSummary returns, for each team the user belongs to, the member count and
-// the number of tasks completed in the last 7 days. Counts are computed in
-// derived tables to avoid a members x tasks cartesian join.
 func (r *AnalyticsRepository) TeamSummary(ctx context.Context, userID int64) ([]domain.TeamSummary, error) {
 	result := make([]domain.TeamSummary, 0)
 
@@ -55,8 +50,6 @@ func (r *AnalyticsRepository) TeamSummary(ctx context.Context, userID int64) ([]
 	return result, nil
 }
 
-// TopCreators returns the top-3 task creators for the last 30 days in each
-// team the user belongs to, ranked with a window function.
 func (r *AnalyticsRepository) TopCreators(ctx context.Context, userID int64) ([]domain.TopCreator, error) {
 	result := make([]domain.TopCreator, 0)
 
@@ -103,8 +96,6 @@ func (r *AnalyticsRepository) TopCreators(ctx context.Context, userID int64) ([]
 	return result, nil
 }
 
-// InvalidAssignees finds tasks (within the user's teams) whose assignee is not
-// a member of the task's team — a data-integrity validation query.
 func (r *AnalyticsRepository) InvalidAssignees(ctx context.Context, userID int64) ([]domain.InvalidAssigneeTask, error) {
 	result := make([]domain.InvalidAssigneeTask, 0)
 

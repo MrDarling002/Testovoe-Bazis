@@ -13,21 +13,17 @@ import (
 	"github.com/example/Testovoe-Bazis/internal/domain"
 )
 
-// maxBodyBytes caps request body size to protect against oversized payloads.
-const maxBodyBytes = 1 << 20 // 1 MiB
+const maxBodyBytes = 1 << 20
 
 func respondJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 
 	if payload != nil {
-		_ = json.NewEncoder(w).Encode(payload) //nolint:errcheck // headers are already sent
+		_ = json.NewEncoder(w).Encode(payload)
 	}
 }
 
-// respondError maps domain errors to HTTP statuses. Validation and conflict
-// messages are produced by our own code and are safe to expose; anything
-// unrecognized is logged and hidden behind a generic 500.
 func (h *Handler) respondError(w http.ResponseWriter, r *http.Request, err error) {
 	var (
 		status int

@@ -18,9 +18,6 @@ type createTaskRequest struct {
 	AssigneeID  *int64 `json:"assignee_id"`
 }
 
-// updateTaskRequest keeps assignee_id as raw JSON so the handler can tell
-// apart three cases: field absent (no change), explicit null (unassign) and
-// a concrete user ID (reassign).
 type updateTaskRequest struct {
 	Title       *string         `json:"title"`
 	Description *string         `json:"description"`
