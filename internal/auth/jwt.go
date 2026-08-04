@@ -1,10 +1,12 @@
+// Package auth provides JWT issuing/parsing and the HTTP authentication
+// middleware that stores the user identity in the request context.
 package auth
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,20 +14,20 @@ import (
 )
 
 type Claims struct {
-	UserID int64 `json:"user_id"`
+	UserID   int64  `json:"user_id"`
 	Username string `json:"username"`
 	jwt.RegisteredClaims
 }
 
 type JWTManager struct {
 	secret []byte
-	ttl time.Duration
+	ttl    time.Duration
 }
 
 func NewJWTManager(secret string, ttl time.Duration) *JWTManager {
 	return &JWTManager{
 		secret: []byte(secret),
-		ttl: ttl,
+		ttl:    ttl,
 	}
 }
 
@@ -36,8 +38,8 @@ func (m *JWTManager) Generate(userID int64, username string) (string, error) {
 		UserID:   userID,
 		Username: username,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject: fmt.Sprintf("%d", userID),
-			IssuedAt: jwt.NewNumericDate(now),
+			Subject:   strconv.FormatInt(userID, 10),
+			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(m.ttl)),
 		},
 	}
@@ -48,13 +50,13 @@ func (m *JWTManager) Generate(userID int64, username string) (string, error) {
 }
 
 func (m *JWTManager) Parse(token string) (*Claims, error) {
-	parsed, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+	parsed, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
+
 		return m.secret, nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +69,9 @@ func (m *JWTManager) Parse(token string) (*Claims, error) {
 	return claims, nil
 }
 
-type ctxKey string
+type ctxKey struct{}
 
-const userIDKey ctxKey = "user_id"
+var userIDKey ctxKey
 
 func UserIDFromContext(ctx context.Context) (int64, bool) {
 	v, ok := ctx.Value(userIDKey).(int64)
@@ -85,19 +87,19 @@ func AuthMiddleware(manager *JWTManager) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
 			if header == "" {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				writeUnauthorized(w)
 				return
 			}
 
 			token := strings.TrimPrefix(header, "Bearer ")
 			if token == header {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				writeUnauthorized(w)
 				return
 			}
 
 			claims, err := manager.Parse(token)
 			if err != nil {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				writeUnauthorized(w)
 				return
 			}
 
@@ -105,4 +107,10 @@ func AuthMiddleware(manager *JWTManager) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+func writeUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	w.Write([]byte(`{"error":"unauthorized"}`)) //nolint:errcheck // best effort
 }

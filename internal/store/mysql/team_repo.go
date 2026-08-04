@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+
+	"github.com/jmoiron/sqlx"
 
 	"github.com/example/Testovoe-Bazis/internal/domain"
-	"github.com/jmoiron/sqlx"
 )
 
 type TeamRepository struct {
@@ -20,35 +22,33 @@ func NewTeamRepository(db *sqlx.DB) *TeamRepository {
 func (r *TeamRepository) Create(ctx context.Context, name string, description string, creatorID int64) (domain.Team, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return domain.Team{}, err
+		return domain.Team{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO teams (name, description, created_by)
 		VALUES (?, ?, ?)
 	`, name, description, creatorID)
-
 	if err != nil {
-		return domain.Team{}, err
+		return domain.Team{}, fmt.Errorf("insert team: %w", err)
 	}
 
 	teamID, err := res.LastInsertId()
 	if err != nil {
-		return domain.Team{}, err
+		return domain.Team{}, fmt.Errorf("last insert id: %w", err)
 	}
 
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO team_members (team_id, user_id, role)
 		VALUES (?, ?, 'owner')
 	`, teamID, creatorID)
-
 	if err != nil {
-		return domain.Team{}, err
+		return domain.Team{}, fmt.Errorf("insert owner membership: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return domain.Team{}, err
+		return domain.Team{}, fmt.Errorf("commit tx: %w", err)
 	}
 
 	return r.Get(ctx, teamID)
@@ -62,19 +62,20 @@ func (r *TeamRepository) Get(ctx context.Context, id int64) (domain.Team, error)
 		FROM teams
 		WHERE id = ?
 	`, id)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Team{}, domain.ErrNotFound
 		}
-		return domain.Team{}, err
+
+		return domain.Team{}, fmt.Errorf("select team: %w", err)
 	}
 
 	return team, nil
 }
 
 func (r *TeamRepository) ListByUser(ctx context.Context, userID int64) ([]domain.Team, error) {
-	var teams []domain.Team
+	teams := make([]domain.Team, 0)
+
 	err := r.db.SelectContext(ctx, &teams, `
 		SELECT
 			t.id,
@@ -88,14 +89,15 @@ func (r *TeamRepository) ListByUser(ctx context.Context, userID int64) ([]domain
 		WHERE tm.user_id = ?
 		ORDER BY t.id DESC
 	`, userID)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("select teams by user: %w", err)
 	}
 
 	return teams, nil
 }
 
+// GetMemberRole returns domain.ErrNotFound when the user is not a member of
+// the team; interpreting that as "forbidden" is a service-layer decision.
 func (r *TeamRepository) GetMemberRole(ctx context.Context, teamID int64, userID int64) (domain.Role, error) {
 	var role domain.Role
 
@@ -104,12 +106,12 @@ func (r *TeamRepository) GetMemberRole(ctx context.Context, teamID int64, userID
 		FROM team_members
 		WHERE team_id = ? AND user_id = ?
 	`, teamID, userID)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", domain.ErrForbidden
+			return "", domain.ErrNotFound
 		}
-		return "", err
+
+		return "", fmt.Errorf("select member role: %w", err)
 	}
 
 	return role, nil
@@ -125,9 +127,8 @@ func (r *TeamRepository) IsMember(ctx context.Context, teamID int64, userID int6
 			WHERE team_id = ? AND user_id = ?
 		)
 	`, teamID, userID)
-
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("check membership: %w", err)
 	}
 
 	return exists, nil
@@ -138,12 +139,12 @@ func (r *TeamRepository) AddMember(ctx context.Context, teamID int64, userID int
 		INSERT INTO team_members (team_id, user_id, role, invited_by)
 		VALUES (?, ?, ?, ?)
 	`, teamID, userID, role, invitedBy)
-
 	if err != nil {
 		if IsMySQLDuplicate(err) {
-			return domain.ErrConflict
+			return fmt.Errorf("%w: user is already a member of the team", domain.ErrConflict)
 		}
-		return err
+
+		return fmt.Errorf("insert team member: %w", err)
 	}
 
 	return nil

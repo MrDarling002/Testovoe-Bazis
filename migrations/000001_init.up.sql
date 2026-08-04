@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     email VARCHAR(255) NOT NULL,
     username VARCHAR(100) NOT NULL,
-    password_hash CHAR(60) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (id),
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS teams (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     name VARCHAR(120) NOT NULL,
-    description TEXT NULL,
+    description TEXT NOT NULL,
     created_by BIGINT UNSIGNED NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -55,13 +55,13 @@ CREATE TABLE IF NOT EXISTS tasks (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     team_id BIGINT UNSIGNED NOT NULL,
     title VARCHAR(200) NOT NULL,
-    description TEXT NULL,
+    description TEXT NOT NULL,
     status ENUM('todo', 'in_progress', 'done') NOT NULL DEFAULT 'todo',
     assignee_id BIGINT UNSIGNED NULL,
     created_by BIGINT UNSIGNED NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    completed_at DATETIME NULL,
+    completed_at TIMESTAMP NULL DEFAULT NULL,
 
     PRIMARY KEY (id),
 
@@ -101,8 +101,6 @@ CREATE TABLE IF NOT EXISTS task_history (
     KEY idx_task_history_task_created (task_id, created_at),
 
     KEY idx_task_history_changed_by (changed_by),
-
-    KEY idx_task_history_field_new_value (field, new_value),
 
     CONSTRAINT fk_task_history_task
         FOREIGN KEY (task_id) REFERENCES tasks (id)

@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/Testovoe-Bazis/internal/domain"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+
+	"github.com/example/Testovoe-Bazis/internal/domain"
 )
 
 type TaskRepository struct {
@@ -22,31 +23,33 @@ func NewTaskRepository(db *sqlx.DB) *TaskRepository {
 	return &TaskRepository{db: db}
 }
 
+const taskColumns = `
+	id,
+	team_id,
+	title,
+	description,
+	status,
+	assignee_id,
+	created_by,
+	created_at,
+	updated_at,
+	completed_at
+`
+
 func (r *TaskRepository) Get(ctx context.Context, id int64) (domain.Task, error) {
 	var task domain.Task
 
-	query := `
-		SELECT
-			id,
-			team_id,
-			title,
-			description,
-			status,
-			assignee_id,
-			created_by,
-			created_at,
-			updated_at,
-			completed_at
+	err := r.db.GetContext(ctx, &task, `
+		SELECT `+taskColumns+`
 		FROM tasks
 		WHERE id = ?
-	`
-
-	err := r.db.GetContext(ctx, &task, query, id)
+	`, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Task{}, domain.ErrNotFound
 		}
-		return domain.Task{}, err
+
+		return domain.Task{}, fmt.Errorf("select task: %w", err)
 	}
 
 	return task, nil
@@ -56,7 +59,7 @@ func (r *TaskRepository) List(ctx context.Context, filters domain.TaskFilters) (
 	filters.Normalize()
 
 	where := []string{"team_id = ?"}
-	args := []interface{}{filters.TeamID}
+	args := []any{filters.TeamID}
 
 	if filters.Status != "" {
 		where = append(where, "status = ?")
@@ -70,44 +73,29 @@ func (r *TaskRepository) List(ctx context.Context, filters domain.TaskFilters) (
 
 	whereSQL := strings.Join(where, " AND ")
 
-	countQuery := fmt.Sprintf(`
-		SELECT COUNT(*)
-		FROM tasks
-		WHERE %s
-	`, whereSQL)
-
 	var total int64
 
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM tasks WHERE %s`, whereSQL)
 	if err := r.db.GetContext(ctx, &total, countQuery, args...); err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("count tasks: %w", err)
 	}
 
 	listQuery := fmt.Sprintf(`
-		SELECT
-			id,
-			team_id,
-			title,
-			description,
-			status,
-			assignee_id,
-			created_by,
-			created_at,
-			updated_at,
-			completed_at
+		SELECT `+taskColumns+`
 		FROM tasks
 		WHERE %s
 		ORDER BY id DESC
 		LIMIT ? OFFSET ?
 	`, whereSQL)
 
-	listArgs := make([]interface{}, 0, len(args)+2)
+	listArgs := make([]any, 0, len(args)+2)
 	listArgs = append(listArgs, args...)
 	listArgs = append(listArgs, filters.PerPage, (filters.Page-1)*filters.PerPage)
 
-	var tasks []domain.Task
+	tasks := make([]domain.Task, 0, filters.PerPage)
 
 	if err := r.db.SelectContext(ctx, &tasks, listQuery, listArgs...); err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("select tasks: %w", err)
 	}
 
 	return tasks, total, nil
@@ -116,11 +104,11 @@ func (r *TaskRepository) List(ctx context.Context, filters domain.TaskFilters) (
 func (r *TaskRepository) Create(ctx context.Context, task domain.Task) (domain.Task, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Second)
 
 	task.CreatedAt = now
 	task.UpdatedAt = now
@@ -154,14 +142,13 @@ func (r *TaskRepository) Create(ctx context.Context, task domain.Task) (domain.T
 		task.UpdatedAt,
 		task.CompletedAt,
 	)
-
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("insert task: %w", err)
 	}
 
 	id, err := res.LastInsertId()
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("last insert id: %w", err)
 	}
 
 	task.ID = id
@@ -177,18 +164,20 @@ func (r *TaskRepository) Create(ctx context.Context, task domain.Task) (domain.T
 			created_at
 		) VALUES (?, ?, 'created', NULL, NULL, NULL, ?)
 	`, task.ID, task.CreatedBy, now)
-
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("insert task history: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("commit tx: %w", err)
 	}
 
 	return task, nil
 }
 
+// Update loads the task with a row lock, invokes the authorize callback so the
+// permission check and the write happen against the same row version, applies
+// the patch and records every field change in task_history atomically.
 func (r *TaskRepository) Update(
 	ctx context.Context,
 	id int64,
@@ -198,121 +187,33 @@ func (r *TaskRepository) Update(
 ) (domain.Task, error) {
 	tx, err := r.db.BeginTxx(ctx, nil)
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	var task domain.Task
 
 	err = tx.GetContext(ctx, &task, `
-		SELECT
-			id,
-			team_id,
-			title,
-			description,
-			status,
-			assignee_id,
-			created_by,
-			created_at,
-			updated_at,
-			completed_at
+		SELECT `+taskColumns+`
 		FROM tasks
 		WHERE id = ?
 		FOR UPDATE
 	`, id)
-
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Task{}, domain.ErrNotFound
 		}
-		return domain.Task{}, err
+
+		return domain.Task{}, fmt.Errorf("select task for update: %w", err)
 	}
 
 	if err := authorize(task); err != nil {
 		return domain.Task{}, err
 	}
 
-	now := time.Now().UTC()
-	var history []domain.TaskHistory
+	now := time.Now().UTC().Truncate(time.Second)
 
-	if patch.Title != nil && *patch.Title != task.Title {
-		history = append(history, domain.TaskHistory{
-			TaskID: task.ID,
-			ChangedBy: actorID,
-			Action: "updated",
-			Field: "title",
-			OldValue: task.Title,
-			NewValue: *patch.Title,
-		})
-		task.Title = *patch.Title
-	}
-
-	if patch.Description != nil && *patch.Description != task.Description {
-		oldDesc := truncate(task.Description, 500)
-		newDesc := truncate(*patch.Description, 500)
-
-		history = append(history, domain.TaskHistory{
-			TaskID: task.ID,
-			ChangedBy: actorID,
-			Action: "updated",
-			Field:"description",
-			OldValue: oldDesc,
-			NewValue: newDesc,
-		})
-		task.Description = *patch.Description
-	}
-
-	if patch.Status != nil && *patch.Status != task.Status {
-		oldStatus := string(task.Status)
-		newStatus := string(*patch.Status)
-
-		history = append(history, domain.TaskHistory{
-			TaskID: task.ID,
-			ChangedBy: actorID,
-			Action: "updated",
-			Field: "status",
-			OldValue: oldStatus,
-			NewValue: newStatus,
-		})
-
-		task.Status = *patch.Status
-
-		if task.Status == domain.TaskStatusDone {
-			task.CompletedAt = &now
-		} else {
-			task.CompletedAt = nil
-		}
-	}
-
-	if patch.AssigneeID != nil {
-		oldAssignee := "null"
-		if task.AssigneeID != nil {
-			oldAssignee = strconv.FormatInt(*task.AssigneeID, 10)
-		}
-
-		if *patch.AssigneeID == 0 {
-			task.AssigneeID = nil
-		} else {
-			v := *patch.AssigneeID
-			task.AssigneeID = &v
-		}
-
-		newAssignee := "null"
-		if task.AssigneeID != nil {
-			newAssignee = strconv.FormatInt(*task.AssigneeID, 10)
-		}
-
-		if oldAssignee != newAssignee {
-			history = append(history, domain.TaskHistory{
-				TaskID: task.ID,
-				ChangedBy: actorID,
-				Action: "updated",
-				Field: "assignee_id",
-				OldValue: oldAssignee,
-				NewValue: newAssignee,
-			})
-		}
-	}
+	history := buildHistory(&task, patch, actorID, now)
 
 	if len(history) == 0 {
 		return task, nil
@@ -339,9 +240,8 @@ func (r *TaskRepository) Update(
 		task.UpdatedAt,
 		task.ID,
 	)
-
 	if err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("update task: %w", err)
 	}
 
 	for _, h := range history {
@@ -364,21 +264,78 @@ func (r *TaskRepository) Update(
 			h.NewValue,
 			now,
 		)
-
 		if err != nil {
-			return domain.Task{}, err
+			return domain.Task{}, fmt.Errorf("insert task history: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return domain.Task{}, err
+		return domain.Task{}, fmt.Errorf("commit tx: %w", err)
 	}
 
 	return task, nil
 }
 
-func (r *TaskRepository) History(ctx context.Context, taskID int64) ([]domain.TaskHistory, error) {
+// buildHistory mutates task in place according to patch and returns the audit
+// records for every actual change.
+func buildHistory(task *domain.Task, patch domain.TaskPatch, actorID int64, now time.Time) []domain.TaskHistory {
 	var history []domain.TaskHistory
+
+	record := func(field string, oldValue, newValue *string) {
+		history = append(history, domain.TaskHistory{
+			TaskID:    task.ID,
+			ChangedBy: actorID,
+			Action:    "updated",
+			Field:     strPtr(field),
+			OldValue:  oldValue,
+			NewValue:  newValue,
+		})
+	}
+
+	if patch.Title != nil && *patch.Title != task.Title {
+		record("title", strPtr(task.Title), strPtr(*patch.Title))
+		task.Title = *patch.Title
+	}
+
+	if patch.Description != nil && *patch.Description != task.Description {
+		record("description", strPtr(truncate(task.Description, 500)), strPtr(truncate(*patch.Description, 500)))
+		task.Description = *patch.Description
+	}
+
+	if patch.Status != nil && *patch.Status != task.Status {
+		record("status", strPtr(string(task.Status)), strPtr(string(*patch.Status)))
+
+		task.Status = *patch.Status
+
+		if task.Status == domain.TaskStatusDone {
+			task.CompletedAt = &now
+		} else {
+			task.CompletedAt = nil
+		}
+	}
+
+	if patch.Assignee.Set {
+		oldValue := int64Ptr(task.AssigneeID)
+
+		if patch.Assignee.Value == nil {
+			task.AssigneeID = nil
+		} else {
+			v := *patch.Assignee.Value
+			task.AssigneeID = &v
+		}
+
+		newValue := int64Ptr(task.AssigneeID)
+
+		if !equalStrPtr(oldValue, newValue) {
+			record("assignee_id", oldValue, newValue)
+		}
+	}
+
+	return history
+}
+
+func (r *TaskRepository) History(ctx context.Context, taskID int64, limit, offset int) ([]domain.TaskHistory, error) {
+	history := make([]domain.TaskHistory, 0, limit)
 
 	err := r.db.SelectContext(ctx, &history, `
 		SELECT
@@ -393,14 +350,33 @@ func (r *TaskRepository) History(ctx context.Context, taskID int64) ([]domain.Ta
 		FROM task_history
 		WHERE task_id = ?
 		ORDER BY id DESC
-		LIMIT 100
-	`, taskID)
-
+		LIMIT ? OFFSET ?
+	`, taskID, limit, offset)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("select task history: %w", err)
 	}
 
 	return history, nil
+}
+
+func strPtr(s string) *string { return &s }
+
+func int64Ptr(v *int64) *string {
+	if v == nil {
+		return nil
+	}
+
+	s := strconv.FormatInt(*v, 10)
+
+	return &s
+}
+
+func equalStrPtr(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+
+	return *a == *b
 }
 
 func truncate(s string, max int) string {
@@ -408,6 +384,7 @@ func truncate(s string, max int) string {
 	if len(runes) <= max {
 		return s
 	}
+
 	return string(runes[:max])
 }
 
@@ -416,5 +393,6 @@ func IsMySQLDuplicate(err error) bool {
 	if errors.As(err, &mysqlErr) {
 		return mysqlErr.Number == 1062
 	}
+
 	return false
 }

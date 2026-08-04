@@ -1,21 +1,24 @@
 package metrics
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 )
 
 type Metrics struct {
-	RequestsTotal *prometheus.CounterVec
+	RequestsTotal   *prometheus.CounterVec
 	RequestDuration *prometheus.HistogramVec
-	EmailErrors prometheus.Counter
-	RateLimited prometheus.Counter
-	CacheHits prometheus.Counter
-	CacheMisses prometheus.Counter
+	EmailErrors     prometheus.Counter
+	RateLimited     prometheus.Counter
+	CacheHits       prometheus.Counter
+	CacheMisses     prometheus.Counter
 }
 
 func New() *Metrics {
@@ -29,8 +32,8 @@ func New() *Metrics {
 		),
 		RequestDuration: prometheus.NewHistogramVec(
 			prometheus.HistogramOpts{
-				Name: "http_request_duration_seconds",
-				Help: "HTTP request duration in seconds",
+				Name:    "http_request_duration_seconds",
+				Help:    "HTTP request duration in seconds",
 				Buckets: prometheus.DefBuckets,
 			},
 			[]string{"method", "path"},
@@ -65,11 +68,17 @@ func New() *Metrics {
 	return m
 }
 
+// RegisterDBStats exposes database/sql connection pool statistics
+// (open connections, wait count, etc.) as Prometheus metrics.
+func RegisterDBStats(db *sql.DB, dbName string) {
+	prometheus.MustRegister(collectors.NewDBStatsCollector(db, dbName))
+}
+
 func (m *Metrics) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		ww := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		ww := chimiddleware.NewWrapResponseWriter(w, r.ProtoMajor)
 
 		next.ServeHTTP(ww, r)
 
@@ -78,19 +87,12 @@ func (m *Metrics) Middleware(next http.Handler) http.Handler {
 			routePattern = "unknown"
 		}
 
-		status := strconv.Itoa(ww.status)
+		status := ww.Status()
+		if status == 0 {
+			status = http.StatusOK
+		}
 
-		m.RequestsTotal.WithLabelValues(r.Method, routePattern, status).Inc()
+		m.RequestsTotal.WithLabelValues(r.Method, routePattern, strconv.Itoa(status)).Inc()
 		m.RequestDuration.WithLabelValues(r.Method, routePattern).Observe(time.Since(start).Seconds())
 	})
-}
-
-type statusWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (w *statusWriter) WriteHeader(code int) {
-	w.status = code
-	w.ResponseWriter.WriteHeader(code)
 }

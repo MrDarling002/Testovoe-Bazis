@@ -1,26 +1,32 @@
+// Package ratelimit implements a token-bucket rate limiter backed by an
+// atomic Redis Lua script.
 package ratelimit
 
 import (
 	"context"
+	"fmt"
 
-	redisv9 "github.com/redis/go-redis/v9"
+	"github.com/redis/go-redis/v9"
 )
 
 type Limiter interface {
+	// Allow reports whether the request identified by key is within the
+	// limit. On infrastructure errors it returns (false, err); the caller
+	// decides whether to fail open or closed.
 	Allow(ctx context.Context, key string) (bool, error)
 }
 
 type RedisLimiter struct {
-	rdb *redisv9.Client
-	script *redisv9.Script
+	rdb    *redis.Client
+	script *redis.Script
 	limit  int
 }
 
-func NewRedisLimiter(rdb *redisv9.Client, requestsPerMinute int) *RedisLimiter {
+func NewRedisLimiter(rdb *redis.Client, requestsPerMinute int) *RedisLimiter {
 	return &RedisLimiter{
 		rdb:   rdb,
 		limit: requestsPerMinute,
-		script: redisv9.NewScript(`
+		script: redis.NewScript(`
 			local key = KEYS[1]
 			local capacity = tonumber(ARGV[1])
 			local refill_per_second = tonumber(ARGV[2])
@@ -61,12 +67,12 @@ func (l *RedisLimiter) Allow(ctx context.Context, key string) (bool, error) {
 
 	res, err := l.script.Run(ctx, l.rdb, []string{key}, l.limit, refillPerSecond, 1).Result()
 	if err != nil {
-		return true, err
+		return false, fmt.Errorf("run rate limit script: %w", err)
 	}
 
 	allowed, ok := res.(int64)
 	if !ok {
-		return true, nil
+		return false, fmt.Errorf("unexpected rate limit script result type %T", res)
 	}
 
 	return allowed == 1, nil
